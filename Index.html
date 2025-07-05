@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mini Flappy v2.2 (with sound)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+html,body{margin:0;height:100%;background:#70c5ce;font-family:sans-serif;overflow:hidden}
+canvas{display:block;margin:0 auto;background:#70c5ce}
+/* prompt */
+#msg{position:fixed;top:22%;left:50%;transform:translateX(-50%);
+     font:600 24px/1.4 sans-serif;color:#fff;text-align:center;pointer-events:none;user-select:none}
+@keyframes fade{to{opacity:0;visibility:hidden}}
+.hide{animation:fade .25s forwards}
+</style>
+</head>
+<body>
+<canvas id="c" width="480" height="640"></canvas>
+<div id="msg">TAP / CLICK / SPACE</div>
+
+<script>
+(() => {
+/* ─── constants ─── */
+const cvs=document.getElementById("c"),ctx=cvs.getContext("2d"),
+      W=cvs.width,H=cvs.height,
+      GRAV=.45,FLAP=-8,GAP=150,PIPE_W=52,BIRD_R=14,
+      msg=document.getElementById("msg");
+
+/* ─── audio ─── */
+const scoreSnd=new Audio("https://cdn.pixabay.com/download/audio/2022/03/15/audio_71033a093c.mp3?filename=video-game-win-201141.mp3");
+const hitSnd  =new Audio("https://cdn.pixabay.com/download/audio/2021/08/08/audio_56b3a1b155.mp3?filename=retro-game-over-95897.mp3");
+[scoreSnd,hitSnd].forEach(a=>{a.preload="auto";a.volume=.4});
+
+/* ─── draw bird ─── */
+function birdSprite(x,y,a=0){
+  ctx.save();ctx.translate(x,y);ctx.rotate(a);
+  ctx.fillStyle="#ffeb3b";ctx.beginPath();ctx.arc(0,0,BIRD_R,0,6.28);ctx.fill();
+  ctx.fillStyle="#e5c200";ctx.beginPath();ctx.ellipse(-5,0,6,10,.8,0,6.28);ctx.fill();
+  ctx.fillStyle="#ff9800";ctx.beginPath();ctx.moveTo(BIRD_R-2,0);ctx.lineTo(BIRD_R+8,-4);ctx.lineTo(BIRD_R+8,4);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#000";ctx.beginPath();ctx.arc(6,-4,3,0,6.28);ctx.fill();
+  ctx.restore();
+}
+
+/* ─── game state ─── */
+let state,bird,pipes,score,best=+localStorage.getItem("flappyBest")||0;
+function newPipe(){const t=Math.random()*(H-GAP-120)+60;return{x:W+PIPE_W,top:t,passed:false};}
+function reset(){
+  bird={x:W/4,y:H/2,vy:0};
+  pipes=[newPipe()];
+  score=0;state="ready";
+  msg.innerHTML="TAP / CLICK / SPACE";msg.classList.remove("hide");msg.style.display="block";
+}
+function flap(){
+  if(state==="ready"){state="play";msg.classList.add("hide");}
+  else if(state==="dead"){reset();state="play";msg.classList.add("hide");}
+  bird.vy=FLAP;
+}
+
+/* ─── inputs ─── */
+addEventListener("keydown",e=>e.code==="Space"&&flap());
+["mousedown","touchstart"].forEach(ev=>addEventListener(ev,e=>{e.preventDefault();flap();},{passive:false}));
+
+/* ─── loop helpers ─── */
+function update(){
+  if(state!=="play")return;
+  bird.vy+=GRAV;bird.y+=bird.vy;
+  if(bird.y+BIRD_R>H||bird.y-BIRD_R<0) return crash();
+  pipes.forEach(p=>p.x-=2);
+  if(pipes[pipes.length-1].x<W-180)pipes.push(newPipe());
+  if(pipes[0].x<-PIPE_W)pipes.shift();
+  pipes.forEach(p=>{
+    if(!p.passed&&p.x+PIPE_W<bird.x){score++;p.passed=true;scoreSnd.currentTime=0;scoreSnd.play();}
+    const hitX=bird.x+BIRD_R>p.x&&bird.x-BIRD_R<p.x+PIPE_W,
+          hitY=bird.y-BIRD_R<p.top||bird.y+BIRD_R>p.top+GAP;
+    if(hitX&&hitY) crash();
+  });
+}
+function crash(){
+  if(state==="dead")return;
+  state="dead";hitSnd.currentTime=0;hitSnd.play();
+  best=Math.max(best,score);localStorage.setItem("flappyBest",best);
+  msg.innerHTML=`SCORE&nbsp;${score}<br>BEST&nbsp;${best}<br><small>tap to restart</small>`;
+  msg.classList.remove("hide");msg.style.display="block";
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle="#8ec43f";
+  pipes.forEach(p=>{
+    ctx.fillRect(p.x,0,PIPE_W,p.top);
+    ctx.fillRect(p.x,p.top+GAP,PIPE_W,H-p.top-GAP);
+  });
+  birdSprite(bird.x,bird.y,bird.vy/15);
+  ctx.fillStyle="#fff";ctx.font="20px sans-serif";
+  ctx.fillText(score,W/2-ctx.measureText(score).width/2,42);
+}
+function loop(){update();draw();requestAnimationFrame(loop);}
+
+/* ─── start ─── */
+reset();loop();
+})();
+</script>
+</body>
+</html>
